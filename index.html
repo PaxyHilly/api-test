@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Hub Chat</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">AI</span>
+          <span class="brand-name">Hub Chat</span>
+        </div>
+
+        <nav class="tabs" aria-label="Main navigation">
+          <button class="tab active" data-tab="chat">Chat</button>
+          <button class="tab" data-tab="settings">Settings</button>
+        </nav>
+      </header>
+
+      <main class="content">
+        <section id="chat-tab" class="tab-panel active">
+          <div class="chat-layout">
+            <aside class="sidebar">
+              <div class="section-header">
+                <h3>Models</h3>
+              </div>
+              <div id="model-list" class="model-list"></div>
+            </aside>
+
+            <div class="chat-panel">
+              <div id="messages" class="messages" aria-live="polite"></div>
+
+              <form id="chat-form" class="composer">
+                <textarea
+                  id="message-input"
+                  rows="1"
+                  placeholder="Ask a model anything..."
+                ></textarea>
+                <button type="submit" id="send-btn">Send</button>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section id="settings-tab" class="tab-panel">
+          <div class="settings-wrap">
+            <div class="section-header">
+              <h3>API settings</h3>
+              <button id="add-provider-btn" class="secondary-btn">Add custom provider</button>
+            </div>
+            <div id="provider-list" class="provider-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
