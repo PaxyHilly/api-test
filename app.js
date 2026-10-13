@@ -1,94 +1,17 @@
 const STORAGE_KEY = "ai-hub-chat-state-v1";
 
 const defaultProviders = [
-  {
-    id: "openai",
-    name: "OpenAI",
-    type: "openai",
-    baseUrl: "https://api.openai.com/v1",
-    apiKey: "",
-    connected: false,
-    models: ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
-    customModels: ""
-  },
-  {
-    id: "groq",
-    name: "Groq",
-    type: "groq",
-    baseUrl: "https://api.groq.com/openai/v1",
-    apiKey: "",
-    connected: false,
-    models: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
-    customModels: ""
-  },
-  {
-    id: "huggingface",
-    name: "Hugging Face",
-    type: "hf",
-    baseUrl: "https://router.huggingface.co/v1",
-    apiKey: "",
-    connected: false,
-    models: [
-      "meta-llama/Meta-Llama-3.1-8B-Instruct",
-      "mistralai/Mistral-7B-Instruct-v0.2",
-      "google/gemma-2-9b-it"
-    ],
-    customModels: ""
-  },
-  {
-    id: "ollama",
-    name: "Ollama",
-    type: "ollama",
-    baseUrl: "http://localhost:11434",
-    apiKey: "",
-    connected: false,
-    models: ["llama3.1:8b", "mistral:7b", "qwen2.5:7b"],
-    customModels: ""
-  },
-  {
-    id: "openrouter",
-    name: "OpenRouter",
-    type: "openrouter",
-    baseUrl: "https://openrouter.ai/api/v1",
-    apiKey: "",
-    connected: false,
-    models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet", "meta-llama/llama-3.1-8b-instruct"],
-    customModels: ""
-  },
-  {
-    id: "together",
-    name: "Together AI",
-    type: "together",
-    baseUrl: "https://api.together.xyz/v1",
-    apiKey: "",
-    connected: false,
-    models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "Qwen/Qwen2.5-72B-Instruct-Turbo", "deepseek-ai/DeepSeek-V3"],
-    customModels: ""
-  },
-  {
-    id: "deepseek",
-    name: "DeepSeek",
-    type: "deepseek",
-    baseUrl: "https://api.deepseek.com/v1",
-    apiKey: "",
-    connected: false,
-    models: ["deepseek-chat", "deepseek-reasoner"],
-    customModels: ""
-  },
-  {
-    id: "custom",
-    name: "Custom OpenAI-compatible API",
-    type: "custom",
-    baseUrl: "",
-    apiKey: "",
-    connected: false,
-    models: ["your-model-name-here"],
-    customModels: ""
-  }
+  { id: "openai", name: "OpenAI", type: "openai", baseUrl: "https://api.openai.com/v1", apiKey: "", connected: false, models: ["gpt-4o-mini", "gpt-4o"], customModels: "" },
+  { id: "groq", name: "Groq", type: "groq", baseUrl: "https://api.groq.com/openai/v1", apiKey: "", connected: false, models: ["llama-3.1-8b-instant"], customModels: "" },
+  { id: "huggingface", name: "Hugging Face", type: "hf", baseUrl: "https://router.huggingface.co/v1", apiKey: "", connected: false, models: ["meta-llama/Meta-Llama-3.1-8B-Instruct"], customModels: "" },
+  { id: "ollama", name: "Ollama", type: "ollama", baseUrl: "http://localhost:11434", apiKey: "", connected: false, models: ["llama3.1:8b"], customModels: "" },
+  { id: "together", name: "Together AI", type: "together", baseUrl: "https://api.together.xyz/v1", apiKey: "", connected: false, models: [], customModels: "" },
+  { id: "custom", name: "Custom OpenAI-compatible API", type: "custom", baseUrl: "", apiKey: "", connected: false, models: ["your-model-name-here"], customModels: "" }
 ];
 
-const state = loadState();
-const conversation = [];
+let state = loadState();
+let conversation = [];
+let attachmentsBuffer = [];
 
 const els = {
   tabs: document.querySelectorAll(".tab"),
@@ -98,34 +21,24 @@ const els = {
   messages: document.getElementById("messages"),
   chatForm: document.getElementById("chat-form"),
   messageInput: document.getElementById("message-input"),
-  addProviderBtn: document.getElementById("add-provider-btn")
+  addProviderBtn: document.getElementById("add-provider-btn"),
+  attachBtn: document.getElementById("attach-btn"),
+  fileInput: document.getElementById("file-input"),
+  attachmentsEl: document.getElementById("attachments")
 };
 
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return {
-        providers: structuredClone(defaultProviders),
-        activeModelId: null
-      };
-    }
-
+    if (!raw) return { providers: structuredClone(defaultProviders), activeModelId: null };
     const parsed = JSON.parse(raw);
-    const providers = defaultProviders.map((provider) => {
-      const saved = (parsed.providers || []).find((item) => item.id === provider.id);
-      return saved ? { ...provider, ...saved } : provider;
+    const providers = defaultProviders.map((p) => {
+      const saved = (parsed.providers || []).find((x) => x.id === p.id);
+      return saved ? { ...p, ...saved } : p;
     });
-
-    return {
-      providers,
-      activeModelId: parsed.activeModelId || null
-    };
-  } catch (error) {
-    return {
-      providers: structuredClone(defaultProviders),
-      activeModelId: null
-    };
+    return { providers, activeModelId: parsed.activeModelId || null };
+  } catch (e) {
+    return { providers: structuredClone(defaultProviders), activeModelId: null };
   }
 }
 
@@ -134,429 +47,259 @@ function saveState() {
 }
 
 function getConnectedModels() {
-  const results = [];
+  const out = [];
   for (const provider of state.providers) {
     if (!provider.connected) continue;
     const models = Array.isArray(provider.models) ? provider.models : [];
-    for (const model of models) {
-      if (!model || !String(model).trim()) continue;
-      results.push({
-        providerId: provider.id,
-        providerName: provider.name,
-        model,
-        key: `${provider.id}:${model}`
-      });
+    for (const m of models) {
+      if (!m) continue;
+      out.push({ providerId: provider.id, providerName: provider.name, model: m, key: `${provider.id}:${m}` });
     }
   }
-  return results;
+  return out;
 }
 
 function ensureActiveModel() {
   const connected = getConnectedModels();
-  if (!connected.length) {
-    state.activeModelId = null;
-    saveState();
-    return;
-  }
-
-  if (!state.activeModelId || !connected.some((item) => item.key === state.activeModelId)) {
-    state.activeModelId = connected[0].key;
-    saveState();
+  if (!connected.length) { state.activeModelId = null; saveState(); return; }
+  if (!state.activeModelId || !connected.some((c) => c.key === state.activeModelId)) {
+    state.activeModelId = connected[0].key; saveState();
   }
 }
 
 function renderTabs(tabName = "chat") {
-  els.tabs.forEach((button) => {
-    const isActive = button.dataset.tab === tabName;
-    button.classList.toggle("active", isActive);
-  });
-
-  els.tabPanels.forEach((panel) => {
-    const isActive = panel.id === `${tabName}-tab`;
-    panel.classList.toggle("active", isActive);
-  });
+  els.tabs.forEach((b) => b.classList.toggle("active", b.dataset.tab === tabName));
+  els.tabPanels.forEach((p) => p.classList.toggle("active", p.id === `${tabName}-tab`));
 }
 
 function renderModelList() {
   ensureActiveModel();
   const connected = getConnectedModels();
-
   if (!connected.length) {
-    els.modelList.innerHTML = `
-      <div class="empty-state">
-        No connected models yet. Add a key in the Settings tab.
-      </div>
-    `;
-    return;
+    els.modelList.innerHTML = `<div class="empty-state">No connected models yet. Add a key in Settings.</div>`; return;
   }
-
-  els.modelList.innerHTML = connected
-    .map((item) => {
-      const active = item.key === state.activeModelId ? "active" : "";
-      return `
-        <div class="model-card ${active}" data-model-key="${item.key}">
-          <div class="model-card-header">
-            <strong>${escapeHtml(item.model)}</strong>
-            <small>${escapeHtml(item.providerName)}</small>
-          </div>
-          <small>Ready</small>
-        </div>
-      `;
-    })
-    .join("");
-
-  els.modelList.querySelectorAll(".model-card").forEach((card) => {
-    card.addEventListener("click", () => {
-      state.activeModelId = card.dataset.modelKey;
-      saveState();
-      renderModelList();
-    });
-  });
+  els.modelList.innerHTML = connected.map((item) => {
+    const active = item.key === state.activeModelId ? 'active' : '';
+    return `<div class="model-card ${active}" data-model-key="${item.key}"><div class="model-card-header"><strong>${escapeHtml(item.model)}</strong><small>${escapeHtml(item.providerName)}</small></div><small>Ready</small></div>`;
+  }).join("");
+  els.modelList.querySelectorAll('.model-card').forEach((card) => { card.addEventListener('click', () => { state.activeModelId = card.dataset.modelKey; saveState(); renderModelList(); }); });
 }
 
 function renderProviderList() {
-  els.providerList.innerHTML = state.providers
-    .map((provider) => {
-      const buttonText = provider.connected ? "Reconnect" : "Connect";
-      return `
-        <div class="provider-card">
-          <div class="provider-header">
-            <h4>${escapeHtml(provider.name)}</h4>
-            <span class="status-badge ${provider.connected ? "connected" : "disconnected"}">
-              ${provider.connected ? "Connected" : "Disconnected"}
-            </span>
-          </div>
-
-          <div class="provider-meta">
-            <div class="input-row">
-              <label>Base URL</label>
-              <input data-field="baseUrl" value="${escapeHtml(provider.baseUrl || "")}" placeholder="https://..." />
-            </div>
-
-            <div class="input-row">
-              <label>API key</label>
-              <input type="password" data-field="apiKey" value="${escapeHtml(provider.apiKey || "")}" placeholder="Paste API key" />
-            </div>
-
-            <div class="input-row">
-              <label>Models (comma separated)</label>
-              <textarea data-field="customModels" rows="3" placeholder="model-a, model-b">${escapeHtml(provider.customModels || provider.models.join(", "))}</textarea>
-            </div>
-          </div>
-
-          <div class="provider-actions">
-            <button class="connect-btn" data-action="connect" data-provider-id="${provider.id}">${buttonText}</button>
-            <button class="secondary-btn" data-action="clear" data-provider-id="${provider.id}">Clear</button>
-          </div>
+  els.providerList.innerHTML = state.providers.map((provider) => {
+    const buttonText = provider.connected ? 'Reconnect' : 'Connect';
+    return `
+      <div class="provider-card">
+        <div class="provider-header">
+          <h4>${escapeHtml(provider.name)}</h4>
+          <span class="status-badge ${provider.connected ? 'connected' : 'disconnected'}">${provider.connected ? 'Connected' : 'Disconnected'}</span>
         </div>
-      `;
-    })
-    .join("");
+        <div class="provider-meta">
+          <div class="input-row"><label>Base URL</label><input data-field="baseUrl" value="${escapeHtml(provider.baseUrl || '')}" placeholder="https://..." /></div>
+          <div class="input-row"><label>API key</label><input type="password" data-field="apiKey" value="${escapeHtml(provider.apiKey || '')}" placeholder="Paste API key" /></div>
+          <div class="input-row"><label>Models (comma separated)</label><textarea data-field="customModels" rows="3" placeholder="model-a, model-b">${escapeHtml(provider.customModels || provider.models.join(', '))}</textarea></div>
+        </div>
+        <div class="provider-actions">
+          <button class="connect-btn" data-action="connect" data-provider-id="${provider.id}">${buttonText}</button>
+          <button class="secondary-btn" data-action="clear" data-provider-id="${provider.id}">Clear</button>
+        </div>
+      </div>
+    `;
+  }).join('');
 
-  els.providerList.querySelectorAll("[data-field]").forEach((input) => {
-    input.addEventListener("input", () => {
-      const providerCard = input.closest(".provider-card");
-      const providerId = providerCard?.querySelector("[data-provider-id]")?.dataset.providerId;
+  els.providerList.querySelectorAll('[data-field]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const providerId = input.closest('.provider-card')?.querySelector('[data-provider-id]')?.dataset.providerId;
       if (!providerId) return;
-
-      const provider = state.providers.find((item) => item.id === providerId);
+      const provider = state.providers.find((p) => p.id === providerId);
       if (!provider) return;
-
       const field = input.dataset.field;
       provider[field] = input.value;
-
-      if (field === "customModels") {
-        provider.models = input.value
-          .split(",")
-          .map((model) => model.trim())
-          .filter(Boolean);
-      }
-
-      saveState();
-      renderModelList();
+      if (field === 'customModels') provider.models = input.value.split(',').map(s => s.trim()).filter(Boolean);
+      saveState(); renderModelList();
     });
   });
 
-  els.providerList.querySelectorAll("[data-action='connect']").forEach((button) => {
-    button.addEventListener("click", async () => {
-      await connectProvider(button.dataset.providerId);
-    });
-  });
-
-  els.providerList.querySelectorAll("[data-action='clear']").forEach((button) => {
-    button.addEventListener("click", () => {
-      const provider = state.providers.find((item) => item.id === button.dataset.providerId);
-      if (!provider) return;
-
-      provider.apiKey = "";
-      provider.baseUrl = provider.type === "ollama" ? "http://localhost:11434" : "";
-      provider.models = provider.type === "ollama"
-        ? ["llama3.1:8b", "mistral:7b"]
-        : provider.type === "openai"
-          ? ["gpt-4o-mini", "gpt-4o"]
-          : provider.type === "groq"
-            ? ["llama-3.1-8b-instant"]
-            : provider.type === "hf"
-              ? ["meta-llama/Meta-Llama-3.1-8B-Instruct"]
-              : ["your-model-name-here"];
-      provider.connected = false;
-      provider.customModels = "";
-      saveState();
-      renderProviderList();
-      renderModelList();
-    });
-  });
+  els.providerList.querySelectorAll('[data-action="connect"]').forEach((button) => { button.addEventListener('click', async () => connectProvider(button.dataset.providerId)); });
+  els.providerList.querySelectorAll('[data-action="clear"]').forEach((button) => { button.addEventListener('click', () => {
+    const provider = state.providers.find((p) => p.id === button.dataset.providerId);
+    if (!provider) return;
+    provider.apiKey = '';
+    provider.baseUrl = provider.type === 'ollama' ? 'http://localhost:11434' : provider.type === 'together' ? 'https://api.together.xyz/v1' : '';
+    provider.models = provider.type === 'openai' ? ['gpt-4o-mini'] : provider.type === 'groq' ? ['llama-3.1-8b-instant'] : provider.type === 'hf' ? ['meta-llama/Meta-Llama-3.1-8B-Instruct'] : provider.type === 'ollama' ? ['llama3.1:8b'] : ['your-model-name-here'];
+    provider.connected = false; provider.customModels = '';
+    saveState(); renderProviderList(); renderModelList();
+  }); });
 }
 
-function escapeHtml(value = "") {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/\"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
+function escapeHtml(str = '') { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
 
 async function fetchModelsFromEndpoint(provider) {
-  const baseUrl = (provider.baseUrl || "").replace(/\/+$/, "");
-  const apiKey = provider.apiKey?.trim();
-
-  if (!baseUrl) {
-    throw new Error("Base URL is required.");
-  }
-
-  if (provider.type === "ollama") {
+  const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
+  const apiKey = (provider.apiKey || '').trim();
+  if (provider.type === 'ollama') {
     const res = await fetch(`${baseUrl}/api/tags`);
-    if (!res.ok) {
-      throw new Error(`Ollama is unreachable (${res.status}).`);
-    }
+    if (!res.ok) throw new Error(`Ollama unreachable (${res.status})`);
     const data = await res.json();
-    return Array.isArray(data?.models) ? data.models.map((model) => model.name).filter(Boolean) : [];
+    return Array.isArray(data?.models) ? data.models.map(m => m.name) : [];
   }
-
-  if (!apiKey) {
-    throw new Error("API key is required.");
-  }
-
-  const res = await fetch(`${baseUrl}/models`, {
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    }
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Model fetch failed (${res.status}): ${text}`);
-  }
-
+  if (!apiKey) throw new Error('API key is required.');
+  const res = await fetch(`${baseUrl}/models`, { headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` } });
+  if (!res.ok) { const body = await res.text(); throw new Error(`Model fetch failed (${res.status}): ${body}`); }
   const data = await res.json();
-
-  if (Array.isArray(data?.data)) {
-    return data.data.map((model) => model.id).filter(Boolean);
-  }
-
-  if (Array.isArray(data?.models)) {
-    return data.models.map((model) => typeof model === "string" ? model : model.id).filter(Boolean);
-  }
-
+  if (Array.isArray(data?.data)) return data.data.map(m => m.id).filter(Boolean);
+  if (Array.isArray(data?.models)) return data.models.map(m => typeof m === 'string' ? m : m.id).filter(Boolean);
   return [];
 }
 
 async function connectProvider(providerId) {
-  const provider = state.providers.find((item) => item.id === providerId);
+  const provider = state.providers.find(p => p.id === providerId);
   if (!provider) return;
-
   try {
-    provider.connected = false;
-    saveState();
-    renderProviderList();
-
-    let models = [];
-    if (provider.type === "ollama") {
-      models = await fetchModelsFromEndpoint(provider);
-    } else {
-      models = await fetchModelsFromEndpoint(provider);
-    }
-
-    if (provider.customModels?.trim()) {
-      const custom = provider.customModels
-        .split(",")
-        .map((m) => m.trim())
-        .filter(Boolean);
-      if (custom.length) models = [...new Set([...models, ...custom])];
-    }
-
-    if (!models.length) {
-      throw new Error("No models were returned from the API. Check your key and endpoint.");
-    }
-
-    provider.models = [...new Set(models)];
-    provider.connected = true;
-    provider.customModels = provider.models.join(", ");
-    saveState();
-    renderProviderList();
-    renderModelList();
-  } catch (error) {
-    provider.connected = false;
-    saveState();
-    renderProviderList();
-    renderModelList();
-    alert(error.message || "Unable to connect provider.");
+    provider.connected = false; saveState(); renderProviderList();
+    const models = await fetchModelsFromEndpoint(provider);
+    let merged = models;
+    if (provider.customModels?.trim()) merged = [...new Set([...merged, ...provider.customModels.split(',').map(s=>s.trim())])];
+    if (!merged.length) throw new Error('No models returned. Check key/endpoint.');
+    provider.models = merged; provider.connected = true; provider.customModels = provider.models.join(', ');
+    saveState(); renderProviderList(); renderModelList();
+  } catch (err) {
+    provider.connected = false; saveState(); renderProviderList(); renderModelList(); alert(err.message || 'Unable to connect provider.');
   }
 }
 
 function getSelectedModel() {
   ensureActiveModel();
   const connected = getConnectedModels();
-  const selected = connected.find((item) => item.key === state.activeModelId) || connected[0];
-  if (!selected) return null;
-
-  const provider = state.providers.find((item) => item.id === selected.providerId);
-  if (!provider) return null;
-
-  return {
-    ...selected,
-    provider
-  };
+  const selected = connected.find(c => c.key === state.activeModelId) || connected[0];
+  if (!selected) return null; const provider = state.providers.find(p => p.id === selected.providerId); if (!provider) return null; return { ...selected, provider };
 }
 
-async function callOpenAICompatibleAPI(provider, messages, selectedModel) {
-  const baseUrl = (provider.baseUrl || "").replace(/\/+$/, "");
+async function callOpenAICompatibleAPI(provider, messages, selectedModel, attachments=[]) {
+  const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
   const endpoint = `${baseUrl}/chat/completions`;
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${provider.apiKey}`
-    },
-    body: JSON.stringify({
-      model: selectedModel,
-      messages,
-      temperature: 0.7
-    })
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`API request failed (${response.status}): ${body}`);
+  const body = { model: selectedModel, messages, temperature: 0.7 };
+  if (attachments && attachments.length) {
+    // include attachments as inline metadata; many providers will ignore it but it's available for proxies/backends
+    body.attachments = attachments.map(a => ({ name: a.name, type: a.type, data: a.base64 }));
   }
-
-  const data = await response.json();
-  return data?.choices?.[0]?.message?.content || "";
+  const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.apiKey}` }, body: JSON.stringify(body) });
+  if (!res.ok) { const text = await res.text(); throw new Error(`API request failed (${res.status}): ${text}`); }
+  const data = await res.json(); return data?.choices?.[0]?.message?.content || '';
 }
 
-async function callOllama(provider, messages, selectedModel) {
-  const baseUrl = (provider.baseUrl || "http://localhost:11434").replace(/\/+$/, "");
-  const response = await fetch(`${baseUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: selectedModel,
-      messages,
-      stream: false
-    })
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`Ollama request failed (${response.status}): ${body}`);
-  }
-
-  const data = await response.json();
-  return data?.message?.content || "";
+async function callOllama(provider, messages, selectedModel, attachments=[]) {
+  const baseUrl = (provider.baseUrl || 'http://localhost:11434').replace(/\/+$/, '');
+  const body = { model: selectedModel, messages, stream: false };
+  if (attachments.length) body.attachments = attachments.map(a => ({ name: a.name, type: a.type, data: a.base64 }));
+  const res = await fetch(`${baseUrl}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) { const text = await res.text(); throw new Error(`Ollama request failed (${res.status}): ${text}`); }
+  const data = await res.json(); return data?.message?.content || '';
 }
 
-async function sendToProvider(provider, messages, selectedModel) {
-  if (provider.type === "ollama") {
-    return callOllama(provider, messages, selectedModel);
-  }
-  return callOpenAICompatibleAPI(provider, messages, selectedModel);
+async function sendToProvider(provider, messages, selectedModel, attachments=[]) {
+  if (provider.type === 'ollama') return callOllama(provider, messages, selectedModel, attachments);
+  return callOpenAICompatibleAPI(provider, messages, selectedModel, attachments);
 }
 
 function renderConversation() {
-  els.messages.innerHTML = "";
-  conversation.forEach((message) => {
-    const element = document.createElement("div");
-    element.className = `message ${message.role}`;
-    element.textContent = message.content;
-    els.messages.appendChild(element);
+  els.messages.innerHTML = '';
+  conversation.forEach((m) => {
+    const el = document.createElement('div'); el.className = `message ${m.role}`;
+    if (m.attachments && m.attachments.length) {
+      const frag = document.createDocumentFragment();
+      const text = document.createElement('div'); text.textContent = m.content; frag.appendChild(text);
+      m.attachments.forEach((att) => {
+        if (att.type.startsWith('image/')) {
+          const img = document.createElement('img'); img.src = att.dataUrl; img.className = 'attachment-preview'; img.style.maxWidth = '320px'; img.style.borderRadius = '8px'; img.style.marginTop = '8px'; frag.appendChild(img);
+        } else {
+          const link = document.createElement('a'); link.href = att.dataUrl; link.download = att.name; link.textContent = `Download ${att.name}`; link.style.display = 'block'; link.style.marginTop = '6px'; frag.appendChild(link);
+        }
+      });
+      el.appendChild(frag);
+    } else {
+      el.textContent = m.content;
+    }
+    els.messages.appendChild(el);
   });
   els.messages.scrollTop = els.messages.scrollHeight;
 }
 
-async function handleSend(event) {
-  event.preventDefault();
+function appendSystemMessage(role, content, attachments=[]) {
+  conversation.push({ role, content, attachments }); renderConversation();
+}
+
+async function handleSend(e) {
+  e.preventDefault();
   const text = els.messageInput.value.trim();
-  if (!text) return;
-
+  if (!text && !attachmentsBuffer.length) return;
   const selected = getSelectedModel();
-  if (!selected) {
-    alert("Connect at least one provider in Settings before sending a message.");
-    return;
-  }
+  if (!selected) { alert('Connect at least one provider in Settings before sending a message.'); return; }
+  if (!selected.provider.connected) { alert('This provider is not connected. Reconnect it in Settings.'); return; }
 
-  if (!selected.provider.connected) {
-    alert("This provider is not connected. Reconnect it in Settings.");
-    return;
-  }
-
-  conversation.push({ role: "user", content: text });
+  // include attachments metadata in conversation
+  const toSendAttachments = attachmentsBuffer.map(a => ({ name: a.name, type: a.type, base64: a.base64, dataUrl: a.dataUrl }));
+  conversation.push({ role: 'user', content: text || '(attachment)', attachments: toSendAttachments });
   renderConversation();
-  els.messageInput.value = "";
+  els.messageInput.value = '';
+  clearAttachmentsBuffer();
 
-  const assistantBubble = document.createElement("div");
-  assistantBubble.className = "message assistant";
-  assistantBubble.textContent = "Thinking...";
-  els.messages.appendChild(assistantBubble);
-  els.messages.scrollTop = els.messages.scrollHeight;
+  const assistantPlaceholder = { role: 'assistant', content: 'Thinking...', attachments: [] };
+  conversation.push(assistantPlaceholder); renderConversation();
 
   try {
-    const messages = conversation.slice(-12).map((message) => ({
-      role: message.role,
-      content: message.content
-    }));
-
-    const answer = await sendToProvider(selected.provider, messages, selected.model);
-
-    conversation.push({ role: "assistant", content: answer || "" });
+    const messages = conversation.slice(-24).map(m => ({ role: m.role, content: m.content }));
+    const answer = await sendToProvider(selected.provider, messages, selected.model, toSendAttachments);
+    // replace last assistant placeholder
+    conversation = conversation.slice(0, -1);
+    conversation.push({ role: 'assistant', content: answer || '', attachments: [] });
     renderConversation();
-  } catch (error) {
-    conversation.push({ role: "assistant", content: `Error: ${error.message}` });
+  } catch (err) {
+    conversation = conversation.slice(0, -1);
+    conversation.push({ role: 'assistant', content: `Error: ${err.message}`, attachments: [] });
     renderConversation();
   }
 }
 
-els.tabs.forEach((button) => {
-  button.addEventListener("click", () => renderTabs(button.dataset.tab));
-});
-
-els.addProviderBtn.addEventListener("click", () => {
-  const newId = `custom-${Date.now()}`;
-  state.providers.push({
-    id: newId,
-    name: "Custom provider",
-    type: "custom",
-    baseUrl: "",
-    apiKey: "",
-    connected: false,
-    models: ["your-model-name-here"],
-    customModels: ""
+function renderAttachmentsBuffer() {
+  els.attachmentsEl.innerHTML = '';
+  attachmentsBuffer.forEach((att, idx) => {
+    const wrap = document.createElement('div'); wrap.className = 'attachment';
+    if (att.type.startsWith('image/')) {
+      const img = document.createElement('img'); img.className = 'preview'; img.src = att.dataUrl; wrap.appendChild(img);
+    }
+    const meta = document.createElement('div'); meta.style.display = 'flex'; meta.style.flexDirection = 'column';
+    const name = document.createElement('div'); name.textContent = att.name; name.style.fontSize = '0.85rem'; meta.appendChild(name);
+    const size = document.createElement('div'); size.textContent = `${Math.round(att.size/1024)} KB`; size.style.fontSize = '0.75rem'; size.style.color = 'var(--muted)'; meta.appendChild(size);
+    const remove = document.createElement('button'); remove.className = 'secondary-btn'; remove.textContent = 'Remove'; remove.style.marginLeft = '8px'; remove.addEventListener('click', () => { attachmentsBuffer.splice(idx,1); renderAttachmentsBuffer(); });
+    wrap.appendChild(meta); wrap.appendChild(remove);
+    els.attachmentsEl.appendChild(wrap);
   });
-  saveState();
-  renderProviderList();
-});
+}
 
-els.chatForm.addEventListener("submit", handleSend);
+function clearAttachmentsBuffer() { attachmentsBuffer = []; renderAttachmentsBuffer(); }
 
-els.messageInput.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && !event.shiftKey) {
-    event.preventDefault();
-    els.chatForm.requestSubmit();
+els.attachBtn.addEventListener('click', () => els.fileInput.click());
+els.fileInput.addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  const MAX_BYTES = 4 * 1024 * 1024; // 4MB per file limit
+  for (const f of files) {
+    if (f.size > MAX_BYTES) { alert(`File ${f.name} is too large (max 4MB).`); continue; }
+    const dataUrl = await readFileAsDataURL(f);
+    const base64 = dataUrl.split(',')[1] || '';
+    attachmentsBuffer.push({ name: f.name, type: f.type || 'application/octet-stream', size: f.size, dataUrl, base64 });
   }
+  renderAttachmentsBuffer();
+  // reset file input to allow re-upload of same file later
+  els.fileInput.value = '';
 });
 
-renderTabs("chat");
-renderProviderList();
-renderModelList();
+function readFileAsDataURL(file) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(file); }); }
+
+els.chatForm.addEventListener('submit', handleSend);
+els.messageInput.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); els.chatForm.requestSubmit(); } });
+els.tabs.forEach((b) => b.addEventListener('click', () => renderTabs(b.dataset.tab)));
+els.addProviderBtn.addEventListener('click', () => { const id = `custom-${Date.now()}`; state.providers.push({ id, name: 'Custom provider', type: 'custom', baseUrl: '', apiKey: '', connected: false, models: ['your-model-name-here'], customModels: '' }); saveState(); renderProviderList(); });
+
+// initial render
+renderTabs('chat'); renderProviderList(); renderModelList();

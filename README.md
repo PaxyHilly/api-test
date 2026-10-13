@@ -1,53 +1,22 @@
-# Api test
+# AI Hub Chat
 
-A static UI for GitHub Pages that supports multiple providers and model lists.
+A static ChatGPT-style UI for GitHub Pages that supports multiple providers and model lists.
 
-## Features
-- ChatGPT-style interface
-- Settings tab for API keys
-- Works with:
-  - OpenAI
-  - Groq
-  - Hugging Face
-  - Ollama
-  - OpenRouter
-  - Together AI
-  - DeepSeek
-  - custom OpenAI-compatible endpoints
-- Connected models appear automatically on the left sidebar
-- Model switching during chat
-- Works as a static GitHub Pages app
+## New: File & Image Uploading
+This update adds client-side file and image attachments. You can attach images or files (up to 4 MB each) from the composer. Attachments will be displayed inline in the conversation and sent to the provider as base64-encoded attachments in the request body under an "attachments" field.
+
+Notes:
+- Because this is a static front-end app (GitHub Pages), attachments are encoded in the browser and included in the request payload. Some providers may ignore attachments unless you use a backend that understands them. If you use a proxy server, it can extract the attachments and forward them to multimodal endpoints.
+- File size is limited to 4 MB per file to avoid huge payloads in a browser environment.
+
+## How to use attachments
+1. Click Attach and choose files or images.
+2. They appear next to the composer. You can remove them before sending.
+3. Click Send — the message plus attachments will be sent to the selected provider.
 
 ## Deploy to GitHub Pages
-1. Push these files to the root of your repository.
-2. Go to the repository on GitHub.
-3. Open Settings > Pages.
-4. Set source to the default branch (`main` or `master`).
-5. Save.
-6. GitHub Pages will give you a URL.
+1. Push these files to the repository root.
+2. Settings → Pages → set source to the default branch.
 
-## Important notes
-- API keys are stored in `localStorage` in the browser.
-- This is fine for demos and personal use, but not ideal for production.
-- For real production use, keep keys on a backend or proxy server.
-
-## Supported endpoint examples
-- OpenAI: `https://api.openai.com/v1`
-- Groq: `https://api.groq.com/openai/v1`
-- Hugging Face Router: `https://router.huggingface.co/v1`
-- OpenRouter: `https://openrouter.ai/api/v1`
-- Together AI: `https://api.together.xyz/v1`
-- DeepSeek: `https://api.deepseek.com/v1`
-- Ollama: `http://localhost:11434`
-- Custom OpenAI-compatible API: any compatible provider URL
-
-## How to use
-1. Open the app.
-2. Go to Settings.
-3. Add your API keys and base URLs.
-4. Click Connect for each provider.
-5. Select the model you want in the left sidebar.
-6. Start chatting.
-
-## README disclaimer
-This project is intentionally a front-end demo. It lets you connect to real AI providers directly from the browser with your own keys.
+## Security
+- API keys and attachments are handled in-browser and stored in localStorage for settings. Do not use this in production with secret keys or sensitive files — prefer a backend proxy.

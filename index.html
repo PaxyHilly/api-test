@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>api test</title>
+    <title>AI Hub Chat</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
         <div class="brand">
-          <span class="brand-mark">api</span>
-          <span class="brand-name">test</span>
+          <span class="brand-mark">AI</span>
+          <span class="brand-name">Hub Chat</span>
         </div>
 
         <nav class="tabs" aria-label="Main navigation">
@@ -34,6 +34,12 @@
               <div id="messages" class="messages" aria-live="polite"></div>
 
               <form id="chat-form" class="composer">
+                <div class="composer-top">
+                  <button type="button" id="attach-btn" class="secondary-btn">Attach</button>
+                  <input id="file-input" type="file" multiple hidden />
+                  <div id="attachments" class="attachments"></div>
+                </div>
+
                 <textarea
                   id="message-input"
                   rows="1"
