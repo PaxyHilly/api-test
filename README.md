@@ -1,6 +1,6 @@
-# AI Hub Chat
+# Api test
 
-A static ChatGPT-style UI for GitHub Pages that supports multiple providers and model lists.
+A static UI for GitHub Pages that supports multiple providers and model lists.
 
 ## Features
 - ChatGPT-style interface
