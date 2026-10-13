@@ -1,3 +1,5 @@
+/* styles.css updates: code block and inline code styling */
+
 :root {
   --bg: #0b1020;
   --panel: #111827;
@@ -250,6 +252,37 @@ button, input, textarea {
   object-fit: cover;
   border-radius: 8px;
 }
+
+/* Code and inline code styles */
+
+pre.code-block {
+  background: #0b1220;
+  border: 1px solid rgba(148,163,184,0.08);
+  padding: 12px;
+  border-radius: 12px;
+  overflow-x: auto;
+  color: #e6eef6;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace;
+  font-size: 0.9rem;
+  margin: 8px 0;
+}
+
+pre.code-block code {
+  white-space: pre-wrap;
+}
+
+code.inline-code {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(148,163,184,0.06);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Segoe UI Mono", monospace;
+  font-size: 0.9rem;
+}
+
+/* small tweaks for strong/em */
+.message strong { font-weight: 800; }
+.message em { font-style: italic; opacity: 0.95; }
 
 textarea {
   width: 100%;

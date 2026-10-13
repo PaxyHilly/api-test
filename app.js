@@ -1,3 +1,7 @@
+/* app.js - add markdown-like formatting support (code blocks, inline code, bold, italic, and custom prefixes).
+   It preserves safety by escaping user input and only injecting a limited set of tags.
+*/
+
 const STORAGE_KEY = "ai-hub-chat-state-v1";
 
 const defaultProviders = [
@@ -132,7 +136,63 @@ function renderProviderList() {
   }); });
 }
 
-function escapeHtml(str = '') { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;'); }
+function escapeHtml(str = '') { return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#039;'); }
+
+// Render message text with simple markdown-like support:
+// - ```code blocks```
+// - `inline code`
+// - **bold**
+// - *italic* or _italic_
+// - custom prefixes on a line: "#bold " and "#italic "
+function renderMessageContent(raw) {
+  if (!raw) return '';
+
+  // extract code blocks first and replace them with placeholders
+  const codeBlocks = [];
+  let tmp = String(raw);
+  tmp = tmp.replace(/```(\w+)?\n([\s\S]*?)```/g, (m, lang, code) => {
+    const id = `@@CB${codeBlocks.length}@@`;
+    codeBlocks.push({ id, html: `<pre class="code-block"><code>${escapeHtml(code)}</code></pre>` });
+    return id;
+  });
+
+  // extract inline code and replace with placeholders
+  const inlineCodes = [];
+  tmp = tmp.replace(/`([^`]+?)`/g, (m, code) => {
+    const id = `@@CI${inlineCodes.length}@@`;
+    inlineCodes.push({ id, html: `<code class="inline-code">${escapeHtml(code)}</code>` });
+    return id;
+  });
+
+  // Now escape the remaining text
+  let out = escapeHtml(tmp);
+
+  // Custom line-based prefixes: #bold <text>, #italic <text>
+  out = out.replace(/^#bold\s+(.+)$/gim, (_m, p1) => `<strong>${p1}</strong>`);
+  out = out.replace(/^#italic\s+(.+)$/gim, (_m, p1) => `<em>${p1}</em>`);
+
+  // Bold **strong**
+  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  // Italic *em* or _em_
+  out = out.replace(/\*(?!\*)([^*]+?)\*/g, '<em>$1</em>');
+  out = out.replace(/_([^_]+?)_/g, '<em>$1</em>');
+
+  // Restore inline code placeholders
+  for (const ic of inlineCodes) {
+    out = out.replace(ic.id, ic.html);
+  }
+
+  // Restore code block placeholders
+  for (const cb of codeBlocks) {
+    out = out.replace(cb.id, cb.html);
+  }
+
+  // convert newlines to <br> for simple paragraphing (but keep pre/code blocks intact because they were placeholdered)
+  out = out.replace(/\n/g, '<br>');
+
+  return out;
+}
 
 async function fetchModelsFromEndpoint(provider) {
   const baseUrl = (provider.baseUrl || '').replace(/\/+$/, '');
@@ -180,7 +240,6 @@ async function callOpenAICompatibleAPI(provider, messages, selectedModel, attach
   const endpoint = `${baseUrl}/chat/completions`;
   const body = { model: selectedModel, messages, temperature: 0.7 };
   if (attachments && attachments.length) {
-    // include attachments as inline metadata; many providers will ignore it but it's available for proxies/backends
     body.attachments = attachments.map(a => ({ name: a.name, type: a.type, data: a.base64 }));
   }
   const res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${provider.apiKey}` }, body: JSON.stringify(body) });
@@ -206,20 +265,28 @@ function renderConversation() {
   els.messages.innerHTML = '';
   conversation.forEach((m) => {
     const el = document.createElement('div'); el.className = `message ${m.role}`;
+
+    const contentHtml = renderMessageContent(m.content || '');
+
     if (m.attachments && m.attachments.length) {
       const frag = document.createDocumentFragment();
-      const text = document.createElement('div'); text.textContent = m.content; frag.appendChild(text);
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = contentHtml;
+      frag.appendChild(wrapper);
+
       m.attachments.forEach((att) => {
-        if (att.type.startsWith('image/')) {
+        if (att.type && att.type.startsWith('image/')) {
           const img = document.createElement('img'); img.src = att.dataUrl; img.className = 'attachment-preview'; img.style.maxWidth = '320px'; img.style.borderRadius = '8px'; img.style.marginTop = '8px'; frag.appendChild(img);
         } else {
           const link = document.createElement('a'); link.href = att.dataUrl; link.download = att.name; link.textContent = `Download ${att.name}`; link.style.display = 'block'; link.style.marginTop = '6px'; frag.appendChild(link);
         }
       });
+
       el.appendChild(frag);
     } else {
-      el.textContent = m.content;
+      el.innerHTML = contentHtml;
     }
+
     els.messages.appendChild(el);
   });
   els.messages.scrollTop = els.messages.scrollHeight;
@@ -237,7 +304,6 @@ async function handleSend(e) {
   if (!selected) { alert('Connect at least one provider in Settings before sending a message.'); return; }
   if (!selected.provider.connected) { alert('This provider is not connected. Reconnect it in Settings.'); return; }
 
-  // include attachments metadata in conversation
   const toSendAttachments = attachmentsBuffer.map(a => ({ name: a.name, type: a.type, base64: a.base64, dataUrl: a.dataUrl }));
   conversation.push({ role: 'user', content: text || '(attachment)', attachments: toSendAttachments });
   renderConversation();
@@ -250,7 +316,6 @@ async function handleSend(e) {
   try {
     const messages = conversation.slice(-24).map(m => ({ role: m.role, content: m.content }));
     const answer = await sendToProvider(selected.provider, messages, selected.model, toSendAttachments);
-    // replace last assistant placeholder
     conversation = conversation.slice(0, -1);
     conversation.push({ role: 'assistant', content: answer || '', attachments: [] });
     renderConversation();
@@ -265,7 +330,7 @@ function renderAttachmentsBuffer() {
   els.attachmentsEl.innerHTML = '';
   attachmentsBuffer.forEach((att, idx) => {
     const wrap = document.createElement('div'); wrap.className = 'attachment';
-    if (att.type.startsWith('image/')) {
+    if (att.type && att.type.startsWith('image/')) {
       const img = document.createElement('img'); img.className = 'preview'; img.src = att.dataUrl; wrap.appendChild(img);
     }
     const meta = document.createElement('div'); meta.style.display = 'flex'; meta.style.flexDirection = 'column';
@@ -290,7 +355,6 @@ els.fileInput.addEventListener('change', async (e) => {
     attachmentsBuffer.push({ name: f.name, type: f.type || 'application/octet-stream', size: f.size, dataUrl, base64 });
   }
   renderAttachmentsBuffer();
-  // reset file input to allow re-upload of same file later
   els.fileInput.value = '';
 });
 
